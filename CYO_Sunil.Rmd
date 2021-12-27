@@ -1392,12 +1392,12 @@ Accuracy_Ens %>% kable(caption="Accuracy of the Ensemble",col.names = "Accuracy"
 
 ```
 
-**With an ensemble of the above models, we achieved over 96% accuracy in predicting the presence of Hepatitis in the sample**
+**With an ensemble of the above models, we achieved over 97% accuracy in predicting the presence of Hepatitis in the sample**
 
 
 # **Results**
    
-   We analysed the dataset and the attributes available. We studied the correlation between the predictors as well as the outcome. Though Prinicpal Component Analysis works really well to summarize large datasets, our usage of this procedure here enabled us to interpret and visualize the underlying information and the importance of the principal components. We then applied  various classification methods with the objective of improving accuracy. All the methods performed reasonably well w.r.t accuracy, however an Ensemble with "max voting" gave us an improvement over all the other methods and thus is the final method that was chosen to predict the presence of Hepatitis C in the sample. The final reported accuracy using Ensemble is **96%** 
+   We analysed the dataset and the attributes available. We studied the correlation between the predictors as well as the outcome. Though Prinicpal Component Analysis works really well to summarize large datasets, our usage of this procedure here enabled us to interpret and visualize the underlying information and the importance of the principal components. We then applied  various classification methods with the objective of improving accuracy. All the methods performed reasonably well w.r.t accuracy, however an Ensemble with "max voting" gave us an improvement over all the other methods and thus is the final method that was chosen to predict the presence of Hepatitis C in the sample. The final reported accuracy using Ensemble is over **97%** 
    
 # **Conclusion**
 
@@ -1406,13 +1406,14 @@ Accuracy_Ens %>% kable(caption="Accuracy of the Ensemble",col.names = "Accuracy"
    The most important aspect of developing or applying a method/model is to understand the dataset and the various attributes available. 
    As we start analysing the various predictors available in the dataset, it became clear that there are certain predictors that can be leveraged to make         better predictions of the outcome class. We used PCA to better understand the data
    
-   The final method that is selected is the **Ensemble** which yielded an accuracy of **96%** 
+   The final method that is selected is the **Ensemble** which yielded an accuracy of over **97%** 
    
    Tuning the methods further for best parameters would have further resulted in an even better accuracy 
 
 ## **Constraints**
 
-   Trying out the various models and learning about them was very inspiring. There were however some models that didn't behave the way they were intended,        atleast with the default parameters(without tuning)
+   Trying out the various models and learning about them was very inspiring. There were however some models that didn't behave the way they were intended, atleast with the default parameters(without tuning)
+   
    Tuning is a time-intensive activity. Since the dataset in this project is small, it may not have been as time-intensive as some of the larger datasets that    we maylike to work on. In such scenarios, we would have to select appropriate methods and tuning for the intended accuracy. Since Ensemble combines such       models, the number of models that we choose and the size of the dataset would have an impact on the performance(time and memory) of the approach
    
     

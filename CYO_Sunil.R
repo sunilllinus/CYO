@@ -992,8 +992,7 @@ cor(Hepc_cleaned[-(1:4)])[corind]
 #              Scatter Plot of all 10 predictors to visualize this correlation
 #                                                                                                                               #
 ################################################################################################################################# 
-#par("mar")
-#par(mar=c(1,1,1,1))
+
 pairs(~.,data = Hepc_cleaned[-(1:4)],main="Scatter Plot of all 10 predictors",col="dark blue")
 
 
@@ -1130,15 +1129,6 @@ test_set %>% ggplot(aes(Category)) + geom_histogram(aes(fill=..count..),stat = "
     plot.subtitle = element_text(face = "bold", hjust = 0.5)
   ) 
 
-
-# From the data, objective is to identify presence of Hepatitis in the sample based on the qualities/features being analysed
-# We will be using classification models to arrive at a good model to predict
-
-# set.seed(1) # if using R 3.5 or earlier
-set.seed(1, sample.kind = "Rounding") # if using R 3.6 or later
-
-
-
 ################################################################################################################################# 
 #                                                                                                                               #
 # Applying the various models learned in the course as well as some additional learning on a 
@@ -1149,8 +1139,6 @@ set.seed(1, sample.kind = "Rounding") # if using R 3.6 or later
 
 
 models <- c("lda", "naive_bayes", "knn", "multinom", "rf","cforest","nnet")
-
-# glm, addaboost, svmlinear, qda resulted in NAs
 
 ################################################################################################################################# 
 #                                                                                                                               #
@@ -1215,59 +1203,14 @@ names(Accuracy) <- models
 Accuracy
 Accuracy %>% kable(caption="Accuracy of the various models",col.names = c('Accuracy'))
 
-# lda         knn    multinom naive_bayes          rf     cforest 
-# 0.928       0.904       0.904       0.928       0.912       0.904 
-# 
-# |            | Accuracy|
-#   |:-----------|--------:|
-#   |lda         |    0.927|
-#   |naive_bayes |    0.950|
-#   |knn         |    0.911|
-#   |gamLoess    |    0.877|
-#   |multinom    |    0.922|
-#   |rf          |    0.933|
-#   |cforest     |    0.939|
-#   |nnet        |    0.922|
-
 ################################################################################################################################# 
 #                                                                                                                               #
 # Mean of the Accuracy of the various models trained above
 #
 ################################################################################################################################# 
 
-mean(Accuracy)  #0.922
+mean(Accuracy)  
 
-
-# Hepatitis B or C, heavy drinking, and other causes can lead to long-term damage to your liver. Two terms used to describe this are fibrosis and cirrhosis.
-#
-#Hepatitis C is a blood-borne virus which is spread via contaminated blood products; the sharing of needles and syringes to inject drugs; and from mother to child. Hepatitis C has also been shown to be sexually transmitted, particularly among gay men. Risk factors seem to include fisting, group sex, drug use and unprotected sex. In the UK, all blood products are now routinely screened for hepatitis C. There is no vaccine for hepatitis C, but treatment has improved greatly in the last few years. (For more information, read our hepatitis C page.)
-
-# Fibrosis means that healthy liver tissue is starting to be replaced by scar tissue, hardening the liver and interfering with its functions. Fibrosis progresses over time in people with hepatitis B or hepatitis C, and this tends to happen faster in people who also have HIV. Fibrosis can be partially reversed if the cause is identified and dealt with early enough.
-# 
-# Cirrhosis is severe scarring of the liver. Scar tissue replaces the cells that carry out the liver's normal functions and can block the flow of blood through the liver. If it progresses too far, the liver will no longer be able to work properly, possibly leading to problems such as internal bleeding and brain impairment. Liver damage is often permanent at this stage, but sometimes treatment can restore some lost function.
-#
-# Hepatitis C is an infection that can cause severe liver damage.
-# 
-# Recent estimates find that about 160,000 people in the UK are living with hepatitis C. Overall, about one-third of people with HIV also have hepatitis C, known as co-infection. The majority of people living with hepatitis C do not know they have it. There is no vaccine to prevent hepatitis C.
-# 
-# Over years or decades untreated chronic hepatitis C can cause serious liver disease, and it is one of the leading reasons for liver transplants. Damage to the liver can include:
-#   
-#   The latest news and research on hepatitis C symptoms & diagnosis
-# Fibrosis – build-up of collagen and other fibrous scar tissue, leading to a 'stiff' liver.
-# 
-# Cirrhosis – serious scarring that blocks blood flow through the liver, kills liver cells and interferes with liver function.
-
-#https://www.aidsmap.com/about-hiv/hepatitis-c
-
-#https://www.aidsmap.com/about-hiv/what-are-fibrosis-and-cirrhosis
-
-
-#The target attribute for classification is Category (2): blood donors vs. Hepatitis C patients (including its progress ('just' Hepatitis C, Fibrosis, Cirrhosis).
-# 1 0=Blood Donor            
-# 2 0s=suspect Blood Donor      
-# 3 1=Hepatitis                
-# 4 2=Fibrosis                 
-# 5 3=Cirrhosis      
 
 ################################################################################################################################# 
 #                                                                                                                               #
@@ -1309,8 +1252,6 @@ Accuracy_Ens #.966 for >.50,
 
 
 Accuracy_Ens %>% kable(caption="Accuracy of the Ensemble",col.names = "Accuracy")
-
-# with an ensemble of classification algorithms, we achieved over 96% accuracy in predicting the presence of Hepatitis in the sample
 
 
 ################################################################################################################################# 
