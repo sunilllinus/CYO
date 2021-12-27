@@ -1,0 +1,1444 @@
+---
+title: "Hepatitis C Prediction"
+author: "Sunil Kumar P"
+date: "Dec 25 2021"
+output: 
+   pdf_document: 
+      keep_tex: true
+      toc: yes
+      number_sections: yes
+      latex_engine: xelatex
+header-includes: 
+  - \usepackage{microtype}
+  - \usepackage{fontspec}
+  - \setmainfont{Tahoma}  
+  - \usepackage{ragged2e}
+  - \renewcommand{\footnotesize}{\scriptsize\justify}
+  - \usepackage{setspace}
+  - \usepackage{xcolor}
+  - \definecolor{very-light-gray}{gray}{0.95}
+  - \pagenumbering{gobble}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **Overview**
+
+## **About the Dataset**
+
+The data set contains laboratory values of blood donors and Hepatitis C patients and demographic values like age. 
+The data was obtained from UCI Machine Learning Repository: https://archive.ics.uci.edu/ml/datasets/HCV+data
+
+**Attributes 1 to 4 refer to the data of the patient:**
+  1) X (Patient ID/No.)
+  2) Category (diagnosis) (values: '0=Blood Donor', '0s=suspect Blood Donor', '1=Hepatitis', '2=Fibrosis', '3=Cirrhosis')
+  3) Age (in years)
+  4) Sex (f,m)
+
+**Attributes 5 to 14 refer to laboratory data:**
+  5) ALB 
+  6) ALP 
+  7) ALT 
+  8) AST 
+  9) BIL 
+  10) CHE 
+  11) CHOL 
+  12) CREA 
+  13) GGT 
+  14) PROT 
+
+*Quick reference on Hepatitis C:*
+
+  Hepatitis C – an infection that can cause severe liver damage. 
+
+  Fibrosis    – build-up of collagen and other fibrous scar tissue, leading to a 'stiff' liver.
+
+  Cirrhosis   – serious scarring that blocks blood flow through the liver, kills liver cells and interferes with liver function.
+
+## **Objective**
+
+  The target attribute for classification is Category (2): blood donors vs. Hepatitis C patients
+  
+  **The goal of the project is to identify Hepatitis C patients(including its progress ('just' Hepatitis C, Fibrosis, Cirrhosis)**
+
+## **Key Steps**
+  
+  Below are the Key steps that were performed for this project.
+  
+  - Data Analysis of the Hepc dataset
+    
+      - Individual attributes
+      
+      - Each attribute's correlation with Category
+      
+      - Correlation of attributes among each other
+      
+      - Principal Component Analysis to identify Variance
+      
+  - Partition Hepc into test and train sets
+    
+    - Data Cleansing
+    
+    - Applying various classification methods to train the train set, followed by predictions on the test set
+    
+    - Employing an Ensemble as the final approach to make a prediction
+  
+# **Analysis**  
+
+   We will begin our analysis by installing the pre-requisite libraries and loading the HepatitisC data from the web
+   
+```{r s1, include=FALSE}
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(dslabs)) install.packages("dslabs", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(caret)
+library(dslabs)
+library(data.table)
+library(knitr)
+library(RColorBrewer)
+
+set.seed(1, sample.kind="Rounding")
+
+################################################################################################################################# 
+#                                                                                                                               #
+#           Dataset hcvdat0.csv downloaded from https://archive.ics.uci.edu/ml/machine-learning-databases/00571/hcvdat0.csv     #
+#                                                                                                                               #
+################################################################################################################################# 
+
+
+Hepc<-read.csv("https://archive.ics.uci.edu/ml/machine-learning-databases/00571/hcvdat0.csv")
+
+
+```
+
+## **Data Analysis**
+   
+Let's Analyze the data and attributes available in the Hepc dataset.
+We will be using common machine learning techniques/algorithms to train a sample of data (called the train set) to generate predictions.
+These predictions are then compared against the remaining sample of data (called the test set).
+   
+To help us make a decision on the best model/method to predict, Accuracy of prediction will be compared across the methods. 
+   
+```{r s2,include=FALSE} 
+str(Hepc)
+nrow(Hepc)
+length(Hepc)
+```
+
+Hepc is a data frame with 615 observations and 14 attributes.                                                        
+Attributes 5 to 14 are the laboratory data and 1 to 4 are the patient's data
+
+```{r s21,echo=FALSE,warning=FALSE} 
+paste("Sample Observations from the Hepc Dataset")
+head(Hepc)
+```
+
+
+### **Data Analysis: Category**
+  
+Category attribute is not numerical
+
+```{r s22,echo=FALSE,warning=FALSE} 
+Hepc %>% group_by(Category) %>% summarize(Count=n()) %>% kable()
+```
+
+From the frequency analysis, we could gather the following 
+Category attribute is composed of 5 categories as listed above 
+
+There are a total of 615 observations
+540 samples belong to Blood Donors whereas 75belong to Hepatitis C patients
+88% are Blood Donors as against 12% Hepatitics C patients
+
+Blood Donors make up most of the samples Category
+
+Visually, here is the histogram that explains the frequencies across categories
+
+```{r s23,echo=FALSE,warning=FALSE} 
+Hepc %>% ggplot(aes(Category)) + geom_histogram(aes(fill=..count..),stat = "count") + geom_text(stat='count', aes(label=..count..,col=I("white")), position = position_stack(vjust = .5),size=4) +
+labs(
+  title = "Data Analysis",
+  subtitle = "Category",
+  x = "Category",
+  y = "Count") +
+   theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5), 
+    axis.text.x = element_text(angle = 90, hjust = 1)
+  ) 
+```
+
+### **Data Analysis: Age**
+
+Below is the Analysis of the Mean, Median and SD of the Age attribute
+
+```{r s24,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$Age %>% class
+tibble(Median=median(Hepc$Age), Mean=mean(Hepc$Age), SD=sd(Hepc$Age)) %>% kable()
+```
+
+Histogram of the Age attribute: 
+
+```{r s25,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Age)) + geom_histogram(aes(fill=..count..),stat = "count") +  geom_text(stat='count', aes(label=..count..,col=I("white")), position = position_stack(vjust = 0.5),size=4) + labs(
+  title = "Data Analysis",
+  subtitle = "Age",
+  x = "Age",
+  y = "Count") +
+  
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  ) 
+```
+
+Exploring the quartile ranges and values
+
+```{r s26,echo=FALSE,warning=FALSE}
+summary(Hepc$Age,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$Age,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 39 and 54 respectively
+The inter quartile range between 1st and 3rd quartiles is 15
+
+
+Below is a boxplot to visualize the IQR 
+
+```{r s261,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=Age)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,100,5)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "Age",
+    x = "Age",
+    y = "Count") +
+  
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  ) 
+```
+
+50% of the samples are in the age group 39 to 54 - 25th(Q1) percentile to 75th(Q3) percentile  
+
+Age's co-relation with Category demonstrated visually via boxplot
+
+```{r s27,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,Age)) + geom_boxplot() +geom_point(position = "jitter",aes(color=Category)) + scale_y_continuous(breaks=seq(0,100,5)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "Age and Category",
+    x = "Category",
+    y = "Age") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+```
+There are overlaps between all the categories w.r.t age. Density of blood donor category is much higher than the others, while Median for 1=Hepatitis is lower than the others
+
+### **Data Analysis: Sex**
+
+Sex is a non-numerical attribute
+
+```{r s28,echo=FALSE,warning=FALSE}
+
+Hepc %>% ggplot(aes(Sex)) + geom_histogram(aes(fill=..count..),stat = "count") +  geom_text(stat='count', aes(label=..count..,col=I("white")), position = position_stack(vjust = 0.5),size=4)+
+  labs(
+    title = "Data Analysis",
+    subtitle = "Sex",
+    x = "Sex",
+    y = "Count") +
+    theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+         )
+```
+
+Sample has more males than females. 377 males and 238 females
+
+Distribution of Sex across Category via boxplot
+
+```{r s29,echo=FALSE,warning=FALSE}
+
+Hepc %>% group_by(Category,Sex) %>% summarize(count=n()) %>% ggplot(aes(Category,count,color=Sex)) + geom_point() +
+  labs(
+    title = "Data Analysis",
+    subtitle = "Sex and Category",
+    x = "Category",
+    y = "Count") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+
+```
+
+### **Data Analysis: ALB**
+
+Below is the Analysis of the Mean, Median and SD of the Age attribute
+
+```{r s30,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$ALB %>% class
+tibble(Median=median(Hepc$ALB,na.rm=TRUE),Mean=mean(Hepc$ALB,na.rm=TRUE),SD=sd(Hepc$ALB,na.rm=TRUE)) %>% kable()
+```
+
+Histogram of the ALB attribute: 
+
+```{r s31,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=ALB)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,90,3)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "ALB",
+    y = "ALB")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s32,echo=FALSE,warning=FALSE}
+summary(Hepc$ALB,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$ALB,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 38.8 and 45.2 respectively
+The inter quartile range between 1st and 3rd quartiles is 6.4
+There is one observation where ALB is NA
+
+
+Below is a boxplot to visualize the IQR 
+
+```{r s33,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(ALB)) + geom_histogram(binwidth = 5,aes(fill=..count..)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "ALB") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )
+```
+
+ALB's co-relation with Category demonstrated visually via boxplot
+
+```{r s34,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,ALB)) + geom_boxplot() + scale_y_continuous(breaks=seq(0,90,10)) + geom_point(position = "jitter",aes(color=Category)) +
+  labs(
+    title = "Data Analysis: Correlation",
+    subtitle = "ALB and Category ",
+    x = "Category",
+    y = "ALB") +
+  
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+```
+
+Os=Blood donor suspect has a very low ALB interquartile range that is different from the other categories 
+3=Cirrhosis has an IQR that doesn't overlap with the other categories
+
+
+### **Data Analysis: ALP**
+
+ALP is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the ALP attribute
+
+```{r s35,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$Age %>% class
+tibble(Median=median(Hepc$Age), Mean=mean(Hepc$Age), SD=sd(Hepc$Age)) %>% kable()
+```
+
+Histogram of the ALP attribute: 
+
+```{r s36,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=ALP)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,450,10)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "ALP",
+    y = "ALP")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+
+```
+
+Exploring the quartile ranges and values
+
+```{r s37,echo=FALSE,warning=FALSE}
+summary(Hepc$ALP,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$ALP,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 52 and 80 respectively
+The inter quartile range between 1st and 3rd quartiles is 28
+There are 18 observations where ALP is NA
+
+Below is a boxplot to visualize the IQR 
+
+```{r s38,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(ALP)) + geom_histogram(binwidth = 25,aes(fill=..count..)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "ALP") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )
+```
+
+Histogram is left-skewed 
+
+ALP's co-relation with Category demonstrated visually via boxplot
+
+```{r s39,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,ALP)) + geom_boxplot(aes(fill=Category)) + scale_y_continuous(breaks=seq(0,450,10)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "ALP and Category",
+    x = "Category",
+    y = "ALP") +
+  
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+```
+There are overlaps across other categories
+1=Hepatitis and 2=Fibrosis overlap each other but are distinguishable form the other categories
+
+
+
+### **Data Analysis: ALT**
+
+ALT is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the ALT attribute
+
+```{r s40,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$ALT %>% class
+tibble(Median=median(Hepc$ALT,na.rm=TRUE),Mean=mean(Hepc$ALT,na.rm=TRUE),SD=sd(Hepc$ALT,na.rm=TRUE)) %>% kable()
+```
+
+Histogram of the ALT attribute: 
+
+```{r s41,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=ALT)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,350,10)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "ALT",
+    y = "ALT") +
+  
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s42,echo=FALSE,warning=FALSE}
+summary(Hepc$ALT,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$ALT,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 16 and 33 respectively.
+The inter quartile range between 1st and 3rd quartiles is 16.7
+However, the Min and Ma are 1 and 325 respectively
+There is 1 observation where ALT is NA
+
+Below is a boxplot to visualize the IQR 
+
+```{r s43,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(ALT)) + geom_histogram(binwidth = 25,aes(fill=..count..))  +
+  labs(
+    title = "Data Analysis",
+    subtitle = "ALT") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )
+```
+
+Histogram is left-skewed 
+
+ALT's co-relation with Category demonstrated visually via boxplot
+
+```{r s44,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,ALT)) + geom_boxplot() + scale_y_continuous(breaks=seq(0,350,10)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "ALT and Category",
+    x = "Category",
+    y = "ALT") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  ) + geom_point(position = "jitter",aes(color=Category))
+```
+
+There are overlaps across all categories
+
+
+### **Data Analysis: AST**
+
+AST is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the AST attribute
+
+```{r s45,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$AST %>% class
+tibble(Median=median(Hepc$AST,na.rm=TRUE),Mean=mean(Hepc$AST,na.rm=TRUE),SD=sd(Hepc$AST,na.rm=TRUE)) %>% kable()
+```
+
+SD is 33.1, which  explains the observations that are outliers 
+
+Histogram of the AST attribute: 
+
+```{r s46,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=AST)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,350,10)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "AST",
+    y = "AST") +
+  
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s47,echo=FALSE,warning=FALSE}
+summary(Hepc$AST,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$AST,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 22 and 33 respectively.
+The inter quartile range between 1st and 3rd quartiles is 11.3
+However, the Min and Ma are 11 and 324 respectively
+
+Below is a boxplot to visualize the IQR 
+
+```{r s48,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(AST)) + geom_histogram(binwidth = 25,aes(fill=..count..)) +
+labs(
+  title = "Data Analysis",
+  subtitle = "AST") +  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  ) 
+```
+
+Histogram is left-skewed 
+
+AST's co-relation with Category demonstrated visually via boxplot
+
+```{r s49,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,AST)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,350,10)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "AST and Category",
+    x = "Category",
+    y = "AST") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+    )
+```
+
+0-Blood donor's IQR doesn't overlap with the other categories. The remaining categories overlap amongst each other
+
+
+### **Data Analysis: BIL**
+
+BIL is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the BIL attribute
+
+```{r s50,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$BIL %>% class
+tibble(Median=median(Hepc$BIL,na.rm=TRUE),Mean=mean(Hepc$BIL,na.rm=TRUE),SD=sd(Hepc$BIL,na.rm=TRUE)) %>% kable()
+```
+
+Histogram of the BIL attribute: 
+
+```{r s51,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=BIL)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,350,10)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "BIL",
+    y = "BIL")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s52,echo=FALSE,warning=FALSE}
+summary(Hepc$BIL,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$BIL,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 5.3 and 11.2 respectively.
+The inter quartile range between 1st and 3rd quartiles is 5.9
+However, the Min and Max are 0.8 and 254 respectively
+
+Below is a boxplot to visualize the IQR 
+
+```{r s53,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(BIL)) + geom_histogram(binwidth = 25,aes(fill=..count..)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "BIL") +  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Histogram is left-skewed 
+
+BIL's co-relation with Category demonstrated visually via boxplot
+
+```{r s54,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,BIL)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,350,10)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "BIL and Category",
+    x = "Category",
+    y = "BIL") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+```
+
+3=Cirrhosis median is high compared to the other categories
+
+
+
+
+### **Data Analysis: CHE**
+
+CHE is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the CHE attribute
+
+```{r s55,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$CHE %>% class
+tibble(Median=median(Hepc$CHE,na.rm=TRUE),Mean=mean(Hepc$CHE,na.rm=TRUE),SD=sd(Hepc$CHE,na.rm=TRUE)) %>% kable()
+```
+
+Standard Deviation is 2.21, which is small compared to the previous predictors
+
+
+Histogram of the CHE attribute: 
+
+```{r s56,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=CHE)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,20,1)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "CHE",
+    y = "CHE")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s57,echo=FALSE,warning=FALSE}
+summary(Hepc$CHE,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$CHE,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 6.94 and 9.59 respectively.
+The inter quartile range between 1st and 3rd quartiles is 2.65
+
+Below is a boxplot to visualize the IQR 
+
+```{r s58,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(CHE)) + geom_histogram(binwidth = 1,aes(fill=..count..))  +
+  labs(
+    title = "Data Analysis",
+    subtitle = "CHE") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )
+```
+
+Histogram resembles a normal distribution 
+
+CHE's co-relation with Category demonstrated visually via boxplot
+
+```{r s59,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,CHE)) + geom_boxplot(aes(fill=Category)) + scale_y_continuous(breaks=seq(0,20,1)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "CHE and Category",
+    x = "Category",
+    y = "CHE") +
+    theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+    )
+```
+
+3=Cirrhosis median is low compared to the other categories
+
+
+
+### **Data Analysis: CHOL**
+
+CHOL is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the CHOL attribute
+
+```{r s60,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$CHOL %>% class
+tibble(Median=median(Hepc$CHOL,na.rm=TRUE),Mean=mean(Hepc$CHOL,na.rm=TRUE),SD=sd(Hepc$CHOL,na.rm=TRUE)) %>% kable()
+```
+
+Standard Deviation is 1.13, which is small compared to most of the previous predictors
+
+
+Histogram of the CHOL attribute: 
+
+```{r s61,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=CHOL)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,20,1)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "CHOL",
+    y = "CHOL")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s62,echo=FALSE,warning=FALSE}
+summary(Hepc$CHOL,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$CHOL,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 4.61 and 6.06 respectively.
+The inter quartile range between 1st and 3rd quartiles is 1.45.
+There are 10 observations that are NAs
+
+Below is a boxplot to visualize the IQR 
+
+```{r s63,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(CHOL)) + geom_histogram(binwidth = 1,aes(fill=..count..))  +
+  labs(
+    title = "Data Analysis",
+    subtitle = "CHOL") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )  
+```
+
+Histogram resembles a normal distribution 
+
+CHOL's co-relation with Category demonstrated visually via boxplot
+
+```{r s64,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,CHOL)) + geom_boxplot(aes(col=Category)) + scale_y_continuous(breaks=seq(0,20,1)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "CHOL and Category",
+    x = "Category",
+    y = "CHOL") +
+    theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+```
+
+There are overlaps across all categories
+
+
+
+### **Data Analysis: CREA**
+
+CREA is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the CREA attribute
+
+```{r s65,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$CREA %>% class
+tibble(Median=median(Hepc$CREA,na.rm=TRUE),Mean=mean(Hepc$CREA,na.rm=TRUE),SD=sd(Hepc$CREA,na.rm=TRUE)) %>% kable()
+```
+
+Standard Deviation is 49.8 
+
+
+Histogram of the CREA attribute: 
+
+```{r s66,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=CREA)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,300,50)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "CREA",
+    y = "CREA")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s67,echo=FALSE,warning=FALSE}
+summary(Hepc$CREA,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$CREA,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 67 and 88 respectively.
+The inter quartile range between 1st and 3rd quartiles is 21
+Max is huge with 1079, whereas Min is 8
+
+Below is a boxplot to visualize the IQR 
+
+```{r s68,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(CREA)) + geom_histogram(binwidth = 50,aes(fill=..count..))  +
+  labs(
+    title = "Data Analysis",
+    subtitle = "CREA") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )   
+```
+
+Histogram is left skewed
+
+CREA's co-relation with Category demonstrated visually via boxplot
+
+```{r s69,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,CREA)) + geom_boxplot(aes(col=Category)) + scale_y_continuous(breaks=seq(0,100,50)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "CREA and Category",
+    x = "Category",
+    y = "CREA") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  ) +geom_point(position = "jitter",aes(color=Category))
+```
+
+There are overlaps across all categories
+
+
+
+### **Data Analysis: GGT**
+
+GGT is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the GGT attribute
+
+```{r s70,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$GGT %>% class
+tibble(Median=median(Hepc$GGT,na.rm=TRUE),Mean=mean(Hepc$GGT,na.rm=TRUE),SD=sd(Hepc$GGT,na.rm=TRUE)) %>% kable()
+```
+
+Standard Deviation is 54.7 
+
+
+Histogram of the GGT attribute: 
+
+```{r s71,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=GGT)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,100,50)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "GGT",
+    y = "GGT")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s72,echo=FALSE,warning=FALSE}
+summary(Hepc$GGT,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$GGT,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 16 and 40 respectively.
+The inter quartile range between 1st and 3rd quartiles is 24.5
+Max is huge with 651, whereas Min is 4
+
+Below is a boxplot to visualize the IQR 
+
+```{r s73,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(GGT)) + geom_histogram(binwidth = 50,aes(fill=..count..))  +
+  labs(
+    title = "Data Analysis",
+    subtitle = "GGT") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )   
+```
+
+Histogram is left skewed
+
+GGT's co-relation with Category demonstrated visually via boxplot
+
+```{r s74,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,GGT)) + geom_boxplot() + scale_y_continuous(breaks=seq(0,100,50)) +
+  labs(
+    title = "Data Analysis: Correlation",
+    subtitle = "GGT and Category",
+    x = "Category",
+    y = "GGT") +
+    theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )+geom_point(position = "jitter",aes(color=Category))
+```
+
+0=Blood donor's median doesn't overlap with the other category IQRs
+
+
+### **Data Analysis: PROT**
+
+PROT is a numeric field and is a continuous variable
+Below is the Analysis of the Mean, Median and SD of the PROT attribute
+
+```{r s75,echo=FALSE,warning=FALSE}
+paste("Class: ") 
+Hepc$PROT %>% class
+tibble(Median=median(Hepc$PROT,na.rm=TRUE),Mean=mean(Hepc$PROT,na.rm=TRUE),SD=sd(Hepc$PROT,na.rm=TRUE)) %>% kable()
+```
+
+Standard Deviation is 5.4
+
+
+Histogram of the PROT attribute: 
+
+```{r s76,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(y=PROT)) + geom_boxplot(fill=I("light blue")) + scale_y_continuous(breaks=seq(0,100,10)) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "PROT",
+    y = "PROT")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5)  )
+```
+
+Exploring the quartile ranges and values
+
+```{r s77,echo=FALSE,warning=FALSE}
+summary(Hepc$PROT,na.rm=TRUE)
+paste("IQR: ") 
+IQR(Hepc$PROT,na.rm=TRUE)
+```
+
+As seen from the summary above, 1st and 3rd Quartiles are 69.3 and 75.4 respectively.
+The inter quartile range between 1st and 3rd quartiles is 6.1
+Max is 90, whereas Min is 44.8
+There is 1 observation with NA
+
+Below is a boxplot to visualize the IQR 
+
+```{r s78,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(PROT)) + geom_histogram(binwidth = 3,aes(fill=..count..))  +
+  labs(
+    title = "Data Analysis",
+    subtitle = "PROT") +  theme(
+      plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(face = "bold", hjust = 0.5)
+    )   
+```
+
+Histogram resembles a normal distribution
+
+PROT's co-relation with Category demonstrated visually via boxplot
+
+```{r s79,echo=FALSE,warning=FALSE}
+Hepc %>% ggplot(aes(Category,PROT)) + geom_boxplot(aes(fill=Category)) + scale_y_continuous(breaks=seq(0,100,50)) +
+  labs(
+    title = "Data Analysis - Correlation",
+    subtitle = "PROT and Category",
+    x = "Category",
+    y = "PROT") +
+    theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+```
+
+0s=Blood donor suspect is completely distinguishable from the other categories 
+
+
+## **Data Cleansing**
+
+Missing data such as the NAs observed above can deteriorate the statistical power of a study and can produce biased estimates. 
+This in turn can lead to invalid inferences
+
+Each row may have more than 1 NAs
+From Hepc, we will be omitting rows with atleast 1 NA 
+
+```{r s80,echo=FALSE,warning=FALSE}
+Hepc_cleaned <- na.omit(Hepc,na.action = "omit", fill = NULL)
+
+paste("No. of rows before cleansing:")
+nrow(Hepc) 
+
+paste("No. of rows after cleansing:")
+nrow(Hepc_cleaned) 
+
+paste("No. of rows dropped:")
+removed <- 1-(nrow(Hepc_cleaned)/nrow(Hepc))
+removed
+```
+
+26 rows were dropped that may have had atleast 1 NA 
+Percentage of dropped rows is 4%
+
+
+## **Correlation among the 10 predictors** 
+
+Correlation doesn't imply causation, however below table is used to understand the magnitude of correlation 
+
+*very highly correlated     - 0.9 to 1.0
+highly correlated           - 0.7 to 0.9 
+moderately correlated       - 0.5 to 0.7 
+low correlation             - 0.3 to 0.5 
+very less correlation       - less than 0.3*
+
+
+```{r s81,include=FALSE,warning=FALSE}
+cor(Hepc_cleaned[-(1:4)]) %>% kable()
+
+corind<- which((cor(Hepc_cleaned[-(1:4)]) >= 0.5) &  (cor(Hepc_cleaned[-(1:4)]) < 1.0))
+cor(Hepc_cleaned[-(1:4)])[corind] %>% kable()
+
+corind<- which((cor(Hepc_cleaned[-(1:4)]) >=0.3) &  (cor(Hepc_cleaned[-(1:4)]) < 0.5))
+cor(Hepc_cleaned[-(1:4)])[corind] %>% kable()
+
+corind<- which((cor(Hepc_cleaned[-(1:4)]) <0.3))
+corind
+cor(Hepc_cleaned[-(1:4)])[corind] %>% kable() 
+
+```
+
+Only two features are moderately correlated -> ALB & PROT have correlation of .571
+
+The following pairs have low correlation (While the rest of the pairs have very little correlation)
+  ALB<>CHE
+  ALP<>GGT
+  AST<>BIL
+  AST<>GGT
+  BIL<>CHE
+  CHE<>CHOL
+  CHE<>PROT
+
+
+**Let us Visualize this Correlation via Scatter plot**
+
+```{r s82,echo=FALSE,warning=FALSE}
+pairs(~.,data = Hepc_cleaned[-(1:4)],main="Scatter Plot of all 10 predictors",col="dark blue")
+```
+
+
+## **Principal Component Analysis**##
+
+Using PCA, we will describe variance in the data. It would help us find obvious clusters. 
+Though PCA reduces dimensionality it won't reduce the features
+
+```{r s83,echo=FALSE,warning=FALSE}
+
+pca <- prcomp(Hepc_cleaned[-(1:4)],center = TRUE, scale = TRUE)
+summary(pca)
+```
+
+10 principal components are displayed in the decreasing order of the standard deviation
+(PC1 being 1.553 and PC10 being 0.5666)
+
+PC1 accounts for >24% of total variance in data
+Using the first 8 components, we can account for >92% of total variance
+
+eigenvalues <1 would mean that the component explains less than a single explanatory variable, hence discarding them
+
+Below is a Screeplot to visualize selection of factors  
+
+```{r s84,echo=FALSE,warning=FALSE}
+
+screeplot(pca, type = "l", npcs = 10)
+abline(h = 1, col="blue", lty=20)
+```
+
+Till PC4, eigen values were >1
+
+Plot to illustrate cumulative variance:
+
+```{r s85,echo=FALSE,warning=FALSE}
+
+cum_var <- cumsum(pca$sdev^2/sum(pca$sdev^2))
+plot(cum_var)
+abline(v = 8, col="blue", lty=20)
+abline(h = 0.9, col="blue", lty=20)
+```
+
+PC1 to PC6 explains >90% variance
+
+Plotting the first 2 principal components to explain >42% variance
+
+```{r s86,echo=FALSE,warning=FALSE}
+plot(pca$x[,1],pca$x[,2],xlab ="PC1",ylab="PC2") 
+```
+        
+Plotting the PCs with Category 
+
+```{r s87,echo=FALSE,warning=FALSE}
+data.frame(type = Hepc_cleaned$Category, pca$x[,1:10]) %>%
+  gather(key = "key", value = "value", -type) %>%  
+  ggplot(aes(key, value, fill = type)) +
+  geom_boxplot()  +
+  labs(
+    title = "PCA plot",
+    subtitle = "10 Features")+
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),
+  )
+```
+
+From the plot, we can see some separation to detect Hepatitis from a blood donor in the lower PCs
+
+
+## **Data Partition**
+
+We will be Splitting the Hepc dataset into train and test sets 
+
+Owing to the smaller dataset size (600+ observations with about 10 predictors), it's a 70:30 split used here for training and test datasets respectively
+
+```{r s88,echo=FALSE,warning=FALSE}
+
+test_index <- createDataPartition(y = Hepc_cleaned$Category, times = 1, p = 0.3, list = FALSE)
+train_set <- Hepc_cleaned[-test_index,]
+test_set <- Hepc_cleaned[test_index,]
+```
+
+Data check: train set, Category                                         
+
+```{r s89,echo=FALSE,warning=FALSE}
+train_set %>% group_by(Category) %>% summarize(Count=n()) %>% kable()
+```
+
+train_set is a dataframe with 410 observations  
+As can be seen from the dataset, Blood Donors make up most of the Category
+
+```{r s90,echo=FALSE,warning=FALSE}
+train_set %>% ggplot(aes(Category)) + geom_histogram(aes(fill=..count..),stat = "count") + geom_text(stat='count', aes(label=..count..,col=I("white")), position = position_stack(vjust = .5),size=4) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "train set",
+    x = "Category",
+    y = "Count") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  ) 
+
+```
+
+Data check: test set, Category     
+
+```{r s91,echo=FALSE,warning=FALSE}
+test_set %>% group_by(Category) %>% summarize(Count=n()) %>% kable()
+```
+
+test_set is a dataframe with 179 observations 
+
+```{r s92,echo=FALSE,warning=FALSE}
+test_set %>% ggplot(aes(Category)) + geom_histogram(aes(fill=..count..),stat = "count") + geom_text(stat='count', aes(label=..count..,col=I("white")), position = position_stack(vjust = .5),size=4) +
+  labs(
+    title = "Data Analysis",
+    subtitle = "test set",
+    x = "Category",
+    y = "Count") +
+  theme(
+    plot.title = element_text(color = I("dark blue"), size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(face = "bold", hjust = 0.5),axis.text.x = element_text(angle = 90, hjust = 1)
+  ) 
+```
+
+## **Applying the models**
+
+
+Our Objective is to identify presence of Hepatitis in the sample based on the qualities/features being analysed
+We will be using classification models to arrive at a good model to predict
+
+A classification model takes all the data points and the feature values associated with each feature and feeds these inputs to the Algorithm which in turn gives us an output in form of probabilities and the number of these probabilities is equal to number of classes  
+
+```{r s93,include=FALSE,warning=FALSE}
+
+models <- c("lda", "naive_bayes", "knn", "multinom", "rf","cforest","nnet")
+
+train_x <-train_set[-(1:4)]
+train_y<-train_set$Category
+
+fits <- lapply(models, function(model){ 
+  print(model)
+  train(train_x,train_y,method = model)
+}) 
+
+names(fits) <- models
+
+```
+
+### **LDA**
+
+**Linear Discriminant Analysis or LDA is a dimensionality reduction technique.**
+LDA is a supervised classification technique. 
+
+The goal of LDA is to project the features in higher dimensional space onto a lower-dimensional space in order to avoid the curse of dimensionality and also reduce resources and dimensional costs.
+
+This category of dimensionality reduction is used in areas like image recognition and predictive analysis in marketing.
+
+
+```{r s94,echo=FALSE,warning=FALSE}
+
+fits[1]
+
+```
+
+### **Naive Bayes**
+
+Naive Bayes is a simple but surprisingly powerful probabilistic machine learning algorithm used for predictive modeling and classification tasks. It is a popular algorithm mainly because it can be easily written in code and predictions can be made real quick which in turn increases the scalability of the solution. 
+
+Some typical applications of Naive Bayes are spam filtering, sentiment prediction, classification of documents, etc. 
+
+
+```{r s95,echo=FALSE,warning=FALSE}
+
+fits[2]
+
+```
+
+### **K-NN**
+
+K nearest neighbors or K-NN Algorithm is a simple algorithm which uses the entire dataset in its training phase. Whenever a prediction is required for an unseen data instance, it searches through the entire training dataset for k-most similar instances and the data with the most similar instance is finally returned as the prediction.
+
+This algorithm suggests that if you’re similar to your neighbours, then you are one of them. Let us consider a simple example, if apple looks more similar to peach, pear, and cherry (fruits) than monkey, cat or a rat (animals), then most likely apple is a fruit.
+
+K-NN can be used for both regression and classification predictive problems. However, in the industry it is mostly used in classification problems.
+
+One of the biggest applications of K-Nearest Neighbor search is Recommender Systems. 
+
+```{r s96,echo=FALSE,warning=FALSE}
+
+fits[3]
+
+```
+
+### **Multinom**
+
+Multinomial Logistic Regression is a classification algorithm used to do multiclass classification.
+Multinomial Logistic regression is nothing but K-1 logistic regression models combined together to predict a nominal labelled data for supervised learning
+
+
+```{r s97,echo=FALSE,warning=FALSE}
+
+fits[4]
+
+```
+
+### **Random Forest**
+
+The random forest is a classification algorithm consisting of many decisions trees. 
+It uses bagging and feature randomness when building each individual tree to try to create an uncorrelated forest of trees
+whose prediction by committee is more accurate than that of any individual tree.
+
+```{r s98,echo=FALSE,warning=FALSE}
+
+fits[5]
+
+```
+
+### **CForest**
+
+The main idea behind CForest is that many trees are built in parallel between the same start and goal states. 
+
+Key concepts of CForest are:
+
+Every time a tree finds a better solution, it is shared with all other trees so that all trees have the best solution found so far.
+Trees are expanded into regions that are known to be beneficial. Samples that cannot lead to a better solution are immediately discarded.
+Trees are pruned every time a better solution is found. Those states in the tree that do not help to find a better solution are removed from the tree.
+CForest is designed to be used with any random tree algorithm under the following assumptions:
+    The search tree has almost sure convergence to the optimal solution.
+    The configuration space obeys the triangle inequality. That is, there exists an admissible heuristic.
+
+```{r s99,echo=FALSE,warning=FALSE}
+
+fits[6]
+
+```
+
+### **Neural Networks**
+
+A neural network classifier is a software system that predicts the value of a categorical value. For example, a neural network could be used to predict a person's political party affiliation (Democrat, Republican, Other) based on the person's age, sex and annual income.
+
+There are many ways to create a neural network. You can code your own from scratch using a programming language such as C# or R. Or you can use a tool such as the open source Weka or Microsoft Azure Machine Learning. The R language has an add-on package named nnet that allows you to create a neural network classifier. 
+
+```{r s100,echo=FALSE,warning=FALSE}
+
+fits[7]
+
+```
+
+### **Predictions and Accuracy of the 7 models**
+   
+   Here are the accuracies of the 7 models trained here
+
+```{r s101,echo=FALSE,warning=FALSE}
+
+pred <- sapply(fits, function(object){
+  predict(object, newdata = test_set)
+})
+
+# sum(is.na(pred))  #to check if there are any NAs in the prediction
+
+n<-seq(1,ncol(pred),1)
+Accuracy <- sapply(n,function(i)
+  mean(pred[,i]==test_set$Category))
+  
+names(Accuracy) <- models  
+Accuracy %>% kable(caption="Accuracy of the various models",col.names = c('Accuracy'))
+ 
+mean(Accuracy)%>% kable(caption = "Mean Accuracy",col.names = "Mean Accuracy")   
+```
+
+**0.929 is the mean Accuracy**
+
+### **Final model**
+
+We will now improve the accuracy using an ensemble
+
+### **Ensemble**
+
+Ensemble methods aim at improving the predictive performance of a given statistical learning or model ﬁtting technique. The general principle of ensemble methods is to construct a linear combination of some model ﬁtting method, instead of using a single ﬁt of the method. 
+
+An ensemble is itself a supervised learning algorithm, because it can be trained and then used to make predictions. The main principle behind the ensemble model is that a group of weak learners come together to form a strong learner, thus increasing the accuracy of the model.When we try to predict the target variable using any machine learning technique, the main causes of difference in actual and predicted values are noise, variance, and bias. Ensemble helps to reduce these factors (except noise, which is irreducible error). The noise-related error is mainly due to noise in the training data and can't be removed. However, the errors due to bias and variance can be reduced.
+The total error can be expressed as follows: 
+
+Total Error = Bias + Variance + Irreducible Error 
+
+There are two families of ensemble methods which are usually distinguished: 
+
+Averaging methods. The driving principle is to build several estimators independently and then to average their predictions. On average, the combined estimator is usually better than any of the single base estimator because its variance is reduced.|
+Examples: Bagging methods, Forests of randomized trees. 
+
+Boosting methods. Base estimators are built sequentially and one tries to reduce the bias of the combined estimator. The motivation is to combine several weak models to produce a powerful ensemble.
+Examples: AdaBoost, Gradient Tree Boosting.
+
+**Basic Ensemble Techniques**
+
+*Max Voting:* Max-voting is one of the simplest ways of combining predictions from multiple machine learning algorithms. Each base model makes a prediction and votes for each sample. The sample class with the highest votes is considered in the final predictive class. It is mainly used for classification problems.  
+
+*Averaging:* Averaging can be used while estimating the probabilities in classification tasks. But it is usually used for regression problems. Predictions are extracted from multiple models and an average of the predictions are used to make the final prediction. 
+
+*Weighted Average:* Like averaging, weighted averaging is also used for regression tasks. Alternatively, it can be used while estimating probabilities in classification problems. Base learners are assigned different weights, which represent the importance of each model in the prediction. 
+
+
+```{r s102,include=FALSE,warning=FALSE}
+                                                                                                                      #
+# Using Ensemble to leverage the models trained above to improve predictions
+# method employed is Max voting
+
+detect <- rowMeans((pred == "3=Cirrhosis") | (pred == "2=Fibrosis") | (pred == "1=Hepatitis"))
+detect
+
+pred_classify <- ifelse(detect > .5, "P", "N")  
+
+test_classify <- ifelse(test_set$Category %in% c("3=Cirrhosis","2=Fibrosis","1=Hepatitis"),"P","N")
+```
+
+Reporting Accuracy of the Ensemble(Improvement in accuracy) 
+
+```{r s103,echo=FALSE,warning=FALSE,warning=FALSE}
+
+Accuracy_Ens <-mean(pred_classify==test_classify) 
+Accuracy_Ens %>% kable(caption="Accuracy of the Ensemble",col.names = "Accuracy")
+
+```
+
+**With an ensemble of the above models, we achieved over 96% accuracy in predicting the presence of Hepatitis in the sample**
+
+
+# **Results**
+   
+   We analysed the dataset and the attributes available. We studied the correlation between the predictors as well as the outcome. Though Prinicpal Component Analysis works really well to summarize large datasets, our usage of this procedure here enabled us to interpret and visualize the underlying information and the importance of the principal components. We then applied  various classification methods with the objective of improving accuracy. All the methods performed reasonably well w.r.t accuracy, however an Ensemble with "max voting" gave us an improvement over all the other methods and thus is the final method that was chosen to predict the presence of Hepatitis C in the sample. The final reported accuracy using Ensemble is **96%** 
+   
+# **Conclusion**
+
+   Classification algorithms belong to a type known as supervised Machine Learning.
+   It involves a model building, based on which the input variables are used to predict the outcome class. In this project, we have used the classification       methods to build such models of prediction.
+   The most important aspect of developing or applying a method/model is to understand the dataset and the various attributes available. 
+   As we start analysing the various predictors available in the dataset, it became clear that there are certain predictors that can be leveraged to make         better predictions of the outcome class. We used PCA to better understand the data
+   
+   The final method that is selected is the **Ensemble** which yielded an accuracy of **96%** 
+   
+   Tuning the methods further for best parameters would have further resulted in an even better accuracy 
+
+## **Constraints**
+
+   Trying out the various models and learning about them was very inspiring. There were however some models that didn't behave the way they were intended,        atleast with the default parameters(without tuning)
+   Tuning is a time-intensive activity. Since the dataset in this project is small, it may not have been as time-intensive as some of the larger datasets that    we maylike to work on. In such scenarios, we would have to select appropriate methods and tuning for the intended accuracy. Since Ensemble combines such       models, the number of models that we choose and the size of the dataset would have an impact on the performance(time and memory) of the approach
+   
+    
+## **Future Work**   
+
+  It is important to find the best approach for the dataset at hand, as large datasets would require efficient implementations. 
+  There is future scope to learn and try out the various other ML algorithms, such as unsupervised learning and reinforcement learning  
+  
+  Choosing the right datasets and exploring other competitive models such as collaborative filtering and tensorflow recommendation systems would be something    that would add a lot of value in understanding how personalized recommendation systems work. These methods can be leverages in the field of banking (that is   currently undergoing a huge digital transformation)    where product cross-selling and advisory based solutions for clients can be made effectively with data   as the driver.
+  
+  
+# **References**
+
+- [Harvardx Data Science Professional certificate](https://www.edx.org/professional-certificate/harvardx-data-science?index=product&queryID=cab97003934909c63198cf6efc2928fb&position=1) 
+**(Instructor: Rafael Irizarry)**
+- [rdocumentation](https://www.rdocumentation.org/packages/recosystem/versions/0.3)
+- [The Comprehensive R Archive Network](https://cran.r-project.org/web/packages/recosystem/recosystem.pdf)
+- [kaggle dataset](https://www.kaggle.com/fedesoriano/hepatitis-c-dataset)
+- [Hepatitis C](https://www.aidsmap.com/about-hiv/hepatitis-c) 
+- [Fibrosis & Cirrhosis](https://www.aidsmap.com/about-hiv/what-are-fibrosis-and-cirrhosis)
+- [Hepatitis C dataset](https://archive.ics.uci.edu/ml/datasets/HCV+data)
+- [Reserachgate](https://www.researchgate.net/post/Is-there-an-ideal-ratio-between-a-training-set-and-validation-set-Which-trade-off-would-you-suggest)
+- [towardsdatascience](https://towardsdatascience.com/principal-component-analysis-pca-101-using-r-361f4c53a9ff)
+- [citeseerx](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.33.1337&rep=rep1&type=pdf)
+- [stackexchange](https://stats.stackexchange.com/questions/88980/why-on-average-does-each-bootstrap-sample-contain-roughly-two-thirds-of-observat/88993#88993)
+- [visualstudiomagazine](https://visualstudiomagazine.com/articles/2016/11/01/using-the-r-nnet-package.aspx)
+- [aidsmap_1](https://www.aidsmap.com/about-hiv/hepatitis-c)
+- [aidsmap_2]( https://www.aidsmap.com/about-hiv/what-are-fibrosis-and-cirrhosis)
+- [stackoverflow](https://stackoverflow.com/)
